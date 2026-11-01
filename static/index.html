@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Site AI Creation Editor</title>
+<style>
+:root{--bg:#0f1220;--card:#181c30;--line:#2a2f4a;--text:#eef1ff;--mut:#9aa3c7;--acc:#7c8cff}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,Segoe UI,Arial;background:var(--bg);color:var(--text)}
+main{max-width:980px;margin:0 auto;padding:32px 20px 80px}
+h1{margin:0 0 4px;font-size:28px}p.sub{color:var(--mut);margin:0 0 24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input,select,textarea{width:100%;background:#10142a;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}
+textarea{resize:vertical;min-height:54px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:150px}
+button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:11px 20px;font:600 15px system-ui;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}button.ghost{background:#252a48}
+.status{margin-top:12px;color:var(--mut);min-height:22px}.err{color:#ff8a8a}
+.scene{border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0;display:flex;gap:14px}
+.scene img{width:150px;height:90px;object-fit:cover;border-radius:8px;background:#10142a;flex:none}
+.scene .f{flex:1}.tag{font-size:12px;color:var(--acc);text-transform:uppercase;letter-spacing:.08em}
+.sw{display:flex;gap:6px;margin-top:6px}.sw i{width:26px;height:26px;border-radius:7px;border:1px solid var(--line)}
+video{width:100%;border-radius:12px;background:#000}.hide{display:none}
+</style></head><body><main>
+<h1>Site AI Creation Editor</h1>
+<p class="sub">Paste a website address. It reads the pages, writes a script, and builds a marketing video on your PC.</p>
+
+<div class="card">
+  <label>Website URL</label>
+  <input id="url" placeholder="https://example.com">
+  <div class="row">
+    <div><label>Pages to read</label><select id="pages"><option>2</option><option selected>4</option><option>6</option><option>8</option></select></div>
+    <div><label>Video length</label><select id="secs"><option value="30">~30 sec</option><option value="45" selected>~45 sec</option><option value="60">~60 sec</option></select></div>
+  </div>
+  <p><button id="go">1. Read site &amp; write script</button></p>
+  <div id="s1" class="status"></div>
+</div>
+
+<div id="editor" class="card hide">
+  <h2 style="margin-top:0" id="brand"></h2><div id="pal" class="sw"></div>
+  <p class="sub" id="writer" style="margin-top:8px"></p>
+  <div id="scenes"></div>
+  <label>Voice</label>
+  <select id="voice">
+    <option value="en-US-AndrewNeural">English (US) – Andrew, male</option>
+    <option value="en-US-AriaNeural">English (US) – Aria, female</option>
+    <option value="en-GB-RyanNeural">English (UK) – Ryan, male</option>
+    <option value="en-GB-SoniaNeural">English (UK) – Sonia, female</option>
+    <option value="en-NG-AbeoNeural">English (Nigeria) – Abeo, male</option>
+    <option value="en-NG-EzinneNeural">English (Nigeria) – Ezinne, female</option>
+  </select>
+  <p><button id="render">2. Make the video</button></p>
+  <div id="s2" class="status"></div>
+</div>
+
+<div id="result" class="card hide"><video id="vid" controls></video>
+  <p><a id="dl" download><button class="ghost" type="button">Download MP4</button></a></p></div>
+
+<script>
+const $=id=>document.getElementById(id);let project=null,sb=null;
+async function post(u,b){const r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});return r.json()}
+async function poll(job,el){for(;;){const j=await (await fetch("/api/job/"+job)).json();
+  if(j.status==="error"){el.innerHTML='<span class="err">'+j.message+'</span>';return null}
+  if(j.status==="done")return j.result;el.textContent=j.message;await new Promise(r=>setTimeout(r,1200))}}
+$("go").onclick=async()=>{
+  const url=$("url").value.trim();if(!url){$("s1").textContent="Enter a URL first.";return}
+  $("go").disabled=true;$("editor").classList.add("hide");$("result").classList.add("hide");$("s1").textContent="Starting…";
+  const r=await post("/api/analyze",{url,max_pages:+$("pages").value,seconds:+$("secs").value});
+  if(r.error){$("s1").innerHTML='<span class="err">'+r.error+'</span>';$("go").disabled=false;return}
+  const res=await poll(r.job,$("s1"));$("go").disabled=false;if(!res)return;
+  project=res.project;sb=res.storyboard;$("s1").textContent="Done. Edit anything you like below.";show(res.site)};
+function show(site){
+  $("brand").textContent=site.name+" — "+sb.title;
+  $("pal").innerHTML=Object.values(site.palette).slice(0,4).map(c=>`<i style="background:${c}"></i>`).join("");
+  $("writer").textContent=sb.writer==="gemini"?"Script written by Gemini.":"Basic script from the site's own headings (add a free Gemini key in .env for a much better one).";
+  $("scenes").innerHTML=sb.scenes.map((s,i)=>{
+    const v=s.visual?`<img src="/work/${project}/${s.visual.file}">`:`<img alt="">`;
+    return `<div class="scene">${v}<div class="f"><div class="tag">Scene ${i+1} · ${s.role}</div>
+      <label>Headline</label><input data-i="${i}" data-k="headline" value="${esc(s.headline)}">
+      <label>Subtext</label><input data-i="${i}" data-k="subtext" value="${esc(s.subtext)}">
+      <label>Voiceover</label><textarea data-i="${i}" data-k="narration">${esc(s.narration)}</textarea></div></div>`}).join("");
+  document.querySelectorAll("#scenes [data-k]").forEach(e=>e.oninput=()=>{sb.scenes[e.dataset.i][e.dataset.k]=e.value});
+  $("editor").classList.remove("hide")}
+function esc(t){return (t||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")}
+$("render").onclick=async()=>{
+  $("render").disabled=true;$("result").classList.add("hide");$("s2").textContent="Starting…";
+  const r=await post("/api/render",{project,storyboard:sb,voice:$("voice").value});
+  if(r.error){$("s2").innerHTML='<span class="err">'+r.error+'</span>';$("render").disabled=false;return}
+  const res=await poll(r.job,$("s2"));$("render").disabled=false;if(!res)return;
+  $("s2").textContent="Your video is ready.";$("vid").src=res.video+"?t="+Date.now();$("dl").href=res.video;
+  $("result").classList.remove("hide");$("result").scrollIntoView({behavior:"smooth"})};
+</script></main></body></html>
