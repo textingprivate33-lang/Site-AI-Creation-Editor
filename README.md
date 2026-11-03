@@ -26,6 +26,14 @@ python app.py
 Open http://localhost:5000, paste a URL, click **1. Read site & write script**, edit any
 text you like, then click **2. Make the video**. Finished videos are saved in `output/`.
 
+## Your message, audience and contact details
+- On the page, choose **who the video is for** and (optionally) type **your message**, for example
+  *"We are open to collaborations with logistics companies."* The script is written around it, and a
+  "partner" scene is added before the final scene.
+- The last scene shows your website and contact details. Add one line per channel to `.env`:
+  `CONTACT_EMAIL`, `CONTACT_WHATSAPP`, `CONTACT_TELEGRAM`, `CONTACT_TIKTOK`, `CONTACT_FACEBOOK`,
+  `CONTACT_INSTAGRAM`. Empty ones are skipped. `.env` is never uploaded to GitHub.
+
 ## Music (optional)
 Drop one royalty-free `.mp3` into `assets/music/`. It is mixed in quietly under the voice.
 

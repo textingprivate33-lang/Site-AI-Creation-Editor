@@ -45,6 +45,18 @@ def wrap(draw, text, fnt, max_w):
     return lines
 
 
+def clamp(lines, n, draw, fnt, max_w):
+    """Never run past n lines; end cleanly with an ellipsis instead of a cut word."""
+    if len(lines) <= n:
+        return lines
+    lines = lines[:n]
+    last = lines[-1].rstrip(" ,;:-–—.")
+    while last and draw.textlength(last + "…", font=fnt) > max_w:
+        last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
+    lines[-1] = last + "…"
+    return lines
+
+
 # ---------- stills ----------
 
 def background(pal, visual_path, seed):
@@ -95,12 +107,20 @@ def text_layer(scene, pal, site, logo_path, has_visual):
             break
         size -= 6
     f = font(size)
-    lines = wrap(d, head, f, max_w)
+    lines = clamp(wrap(d, head, f, max_w), 3 if center else 4, d, f, max_w)
     sf = font(40, bold=False)
-    sub_lines = wrap(d, sub, sf, max_w) if sub else []
+    sub_lines = clamp(wrap(d, sub, sf, max_w), 3 if center else 4, d, sf, max_w) if sub else []
     lh, sh = int(size * 1.15), 54
     total = len(lines) * lh + 36 + len(sub_lines) * sh
     y = (H - total) // 2
+    if scene["role"] == "cta":
+        y -= 70
+    if scene["role"] == "partner":
+        tag, tf = "OPEN TO COLLABORATION", font(34)
+        tw = d.textlength(tag, font=tf) + 70
+        tx = (W - tw) / 2
+        d.rounded_rectangle((tx, y - 100, tx + tw, y - 36), 32, outline=rgb(pal["accent"]) + (255,), width=3)
+        d.text((tx + 35, y - 90), tag, font=tf, fill=rgb(pal["accent"]) + (255,))
     for ln in lines:
         w = d.textlength(ln, font=f)
         x = (W - w) / 2 if center else x_left
@@ -125,13 +145,39 @@ def text_layer(scene, pal, site, logo_path, has_visual):
         img.alpha_composite(lg, (bx0, 60))
         bx0 += lg.width + 20
     d.text((bx0, 78), site["name"], font=font(38), fill=rgb(pal["text"]) + (230,))
-    if scene["role"] == "cta" and site["host"].lower() not in head.lower():
-        pill = site["host"]
-        pf = font(48)
-        pw = d.textlength(pill, font=pf) + 90
-        px, py = (W - pw) / 2, H - 230
-        d.rounded_rectangle((px, py, px + pw, py + 90), 45, fill=rgb(pal["accent"]) + (255,))
-        d.text((px + 45, py + 16), pill, font=pf, fill=(10, 10, 20, 255))
+    if scene["role"] == "cta":
+        items = []
+        if site["host"].lower() not in head.lower():
+            items.append(site["host"])
+        items += [f"{label}: {value}" for label, value in config.CONTACTS]
+        pf = font(40)
+        rows, cur, curw = [], [], 0
+        for t in items:
+            w = d.textlength(t, font=pf) + 70
+            if cur and curw + w + 20 > 1700:
+                rows.append(cur)
+                cur, curw = [], 0
+            cur.append((t, w))
+            curw += w + 20
+        if cur:
+            rows.append(cur)
+        y0 = H - 110 - len(rows) * 100
+        first = site["host"].lower() not in head.lower()
+        n = 0
+        for row in rows:
+            total_w = sum(w for _, w in row) + 20 * (len(row) - 1)
+            x = (W - total_w) / 2
+            for t, w in row:
+                if first and n == 0:
+                    d.rounded_rectangle((x, y0, x + w, y0 + 80), 40, fill=rgb(pal["accent"]) + (255,))
+                    d.text((x + 35, y0 + 17), t, font=pf, fill=(10, 10, 20, 255))
+                else:
+                    d.rounded_rectangle((x, y0, x + w, y0 + 80), 40, fill=(0, 0, 0, 90),
+                                        outline=rgb(pal["accent"]) + (255,), width=3)
+                    d.text((x + 35, y0 + 17), t, font=pf, fill=rgb(pal["text"]) + (255,))
+                x += w + 20
+                n += 1
+            y0 += 100
     return img
 
 
@@ -191,7 +237,7 @@ def render_video(site, storyboard, work_dir, out_path, voice, progress=print):
             words = len(sc.get("narration", "").split()) or 6
             dur = words / 2.5 + 1.0
         dur = round(max(3.5, dur), 2)
-        zoom = ("min(1+0.0006*on,1.13)" if i % 2 == 0 else "max(1.13-0.0006*on,1)")
+        zoom = ("min(1+0.0004*on,1.08)" if i % 2 == 0 else "max(1.08-0.0004*on,1)")
         fc = (f"[0:v]scale=2400:1350,zoompan=z='{zoom}':d=1:x='iw/2-(iw/zoom/2)':"
               f"y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={FPS}[bg];"
               f"[1:v]format=rgba,fade=t=in:st=0.3:d=0.7:alpha=1[tx];"

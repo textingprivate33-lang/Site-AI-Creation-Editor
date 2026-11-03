@@ -42,14 +42,15 @@ def say(job):
     return _say
 
 
-def do_analyze(job, url, max_pages, seconds):
+def do_analyze(job, url, max_pages, seconds, message, audience):
     pid = uuid.uuid4().hex[:8]
     wdir = config.WORK / pid
     log = say(job)
     site = crawler.crawl(url, wdir, max_pages=max_pages, log=log)
-    sb = storyboard.make_storyboard(site, seconds=seconds, log=log)
+    sb = storyboard.make_storyboard(site, seconds=seconds, message=message, audience=audience, log=log)
     (wdir / "storyboard.json").write_text(json.dumps(sb, indent=2), encoding="utf-8")
-    return {"project": pid, "site": site, "storyboard": sb}
+    return {"project": pid, "site": site, "storyboard": sb,
+            "contacts": [f"{k}: {v}" for k, v in config.CONTACTS]}
 
 
 def do_render(job, project, sb, voice):
@@ -74,7 +75,9 @@ def analyze():
         return jsonify(error="Enter a URL"), 400
     pages = max(1, min(int(d.get("max_pages", 4)), 8))
     seconds = max(20, min(int(d.get("seconds", 45)), 90))
-    return jsonify(job=start_job(do_analyze, url, pages, seconds))
+    message = (d.get("message") or "").strip()
+    audience = (d.get("audience") or "general").strip()
+    return jsonify(job=start_job(do_analyze, url, pages, seconds, message, audience))
 
 
 @app.post("/api/render")

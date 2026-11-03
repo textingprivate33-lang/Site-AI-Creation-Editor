@@ -31,6 +31,12 @@ video{width:100%;border-radius:12px;background:#000}.hide{display:none}
     <div><label>Pages to read</label><select id="pages"><option>2</option><option selected>4</option><option>6</option><option>8</option></select></div>
     <div><label>Video length</label><select id="secs"><option value="30">~30 sec</option><option value="45" selected>~45 sec</option><option value="60">~60 sec</option></select></div>
   </div>
+  <label>Who is the video for?</label>
+  <select id="aud"><option value="general">Everyone</option><option value="customers">Customers</option>
+    <option value="businesses">Businesses &amp; vendors</option>
+    <option value="logistics">Logistics companies &amp; partners</option></select>
+  <label>Your message (optional): what must the video say?</label>
+  <textarea id="msg" placeholder="e.g. We are open to collaborations with logistics companies."></textarea>
   <p><button id="go">1. Read site &amp; write script</button></p>
   <div id="s1" class="status"></div>
 </div>
@@ -64,14 +70,15 @@ async function poll(job,el){for(;;){const j=await (await fetch("/api/job/"+job))
 $("go").onclick=async()=>{
   const url=$("url").value.trim();if(!url){$("s1").textContent="Enter a URL first.";return}
   $("go").disabled=true;$("editor").classList.add("hide");$("result").classList.add("hide");$("s1").textContent="Starting…";
-  const r=await post("/api/analyze",{url,max_pages:+$("pages").value,seconds:+$("secs").value});
+  const r=await post("/api/analyze",{url,max_pages:+$("pages").value,seconds:+$("secs").value,audience:$("aud").value,message:$("msg").value});
   if(r.error){$("s1").innerHTML='<span class="err">'+r.error+'</span>';$("go").disabled=false;return}
   const res=await poll(r.job,$("s1"));$("go").disabled=false;if(!res)return;
-  project=res.project;sb=res.storyboard;$("s1").textContent="Done. Edit anything you like below.";show(res.site)};
-function show(site){
+  project=res.project;sb=res.storyboard;$("s1").textContent="Done. Edit anything you like below.";show(res.site,res.contacts)};
+function show(site,contacts){
   $("brand").textContent=site.name+" — "+sb.title;
   $("pal").innerHTML=Object.values(site.palette).slice(0,4).map(c=>`<i style="background:${c}"></i>`).join("");
   $("writer").textContent=sb.writer==="gemini"?"Script written by Gemini.":"Basic script from the site's own headings (add a free Gemini key in .env for a much better one).";
+  $("writer").textContent+=" Contact shown at the end: "+((contacts&&contacts.length)?contacts.join(" · "):"none. Add CONTACT_EMAIL to your .env file.");
   $("scenes").innerHTML=sb.scenes.map((s,i)=>{
     const v=s.visual?`<img src="/work/${project}/${s.visual.file}">`:`<img alt="">`;
     return `<div class="scene">${v}<div class="f"><div class="tag">Scene ${i+1} · ${s.role}</div>
